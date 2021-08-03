@@ -40,7 +40,9 @@ import ida_typeinf
 import idaapi
 import idc
 
+import binsync.data.func
 from . import compat
+from .compat import IDAFunction, IDAFunctionArg
 from .controller import BinsyncController
 from binsync.data.struct import Struct
 
@@ -258,7 +260,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     @quite_init_checker
     def renamed(self, ea, new_name, local_name):
-        # #print("renamed(ea = %x, new_name = %s, local_name = %d)" % (ea, new_name, local_name))
+        #print("renamed(ea = %x, new_name = %s, local_name = %d)" % (ea, new_name, local_name))
         if ida_struct.is_member_id(ea) or ida_struct.get_struc(ea) or ida_enum.get_enum_name(ea):
             # Drop hook to avoid duplicate since already handled by the following hooks:
             # - renaming_struc_member() -> sends 'StrucMemberRenamedEvent'
@@ -271,10 +273,19 @@ class IDBHooks(ida_idp.IDB_Hooks):
         if ida_func is None:
             return 0
 
-        # grab the name instead from ida
-        name = idc.get_func_name(ida_func.start_ea)
-        self.binsync_state_change(self.controller.push_function_name, ida_func.start_ea, name)
+        # rename!
+        cur_func_header = compat.get_func_prototype_info(ida_hexrays.decompile(ida_func.start_ea))
+        binsync_args = {}
+        for idx, arg in cur_func_header.func_args.items():
+            binsync_args[idx] = binsync.data.func.FunctionArgument(idx, arg.name, arg.type_str, arg.size)
 
+        # send the change
+        self.binsync_state_change(self.controller.push_function_header,
+                                  cur_func_header.func_addr,
+                                  cur_func_header.name,
+                                  cur_func_header.ret_type_str,
+                                  binsync_args
+                                  )
         return 0
 
     @quite_init_checker
@@ -435,6 +446,8 @@ class HexRaysHooks:
         # a different decompilation view. It will also get triggered when staying on the
         # same view but having it refreshed
         if event == ida_hexrays.hxe_func_printed:
+            print("triggered a hexrays refresh")
+
             ida_cfunc = args[0]
             func_addr = ida_cfunc.entry_ea
             func = ida_funcs.get_func(func_addr)
@@ -450,11 +463,43 @@ class HexRaysHooks:
                 self.controller.update_states[func_addr].do_needed_updates()
                 self.controller_update_working = False
 
-            # do decompilation comment updates
+            # do decompilation pushes
             if func.start_ea not in self._cached_funcs.keys():
-                self._cached_funcs[func.start_ea] = {"cmts": []}
-            self._update_user_cmts(func.start_ea)
+                self._cached_funcs[func.start_ea] = {
+                    "cmts": [],
+                    "header": None
+                }
+
+            #if not self.controller.decomp_working:
+            #    self._push_new_func_header(ida_cfunc)
+            #    self._push_new_comments(func.start_ea)
         return 0
+
+    @quite_init_checker
+    def _push_new_func_header(self, ida_cfunc):
+        # on first time seeing it, we dont want a push
+        if not self._cached_funcs[ida_cfunc.entry_ea]["header"]:
+            cur_header_str = str(ida_cfunc.type)
+            self._cached_funcs[ida_cfunc.entry_ea]["header"] = cur_header_str
+            return
+
+        cur_header_str = str(ida_cfunc.type)
+        if cur_header_str != self._cached_funcs[ida_cfunc.entry_ea]["header"]:
+            # convert to binsync type
+            cur_func_header = compat.get_func_prototype_info(ida_cfunc)
+            binsync_args = {}
+            for idx, arg in cur_func_header.func_args.items():
+                binsync_args[idx] = binsync.data.func.FunctionArgument(idx, arg.name, arg.type_str, arg.size)
+
+            # send the change
+            self.binsync_state_change(self.controller.push_function_header,
+                                      cur_func_header.func_addr,
+                                      cur_func_header.name,
+                                      cur_func_header.ret_type_str,
+                                      binsync_args
+                                      )
+
+            self._cached_funcs[ida_cfunc.entry_ea]["header"] = cur_header_str
 
     @staticmethod
     def _get_user_cmts(ea):
@@ -474,7 +519,7 @@ class HexRaysHooks:
         return cmts
 
     @quite_init_checker
-    def _update_user_cmts(self, ea):
+    def _push_new_comments(self, ea):
         # get the comments for the function
         cmts = HexRaysHooks._get_user_cmts(ea)
 
@@ -486,7 +531,8 @@ class HexRaysHooks:
         if cmts != self._cached_funcs[ea]["cmts"]:
             # thread it!
             kwargs = {}
-            self.binsync_state_change(self.controller.push_comments, ea, cmts, decompiled=True)
+            self.binsync_state_change(self.controller.push_comments,
+                                      ea, cmts, decompiled=True)
 
             # cache so we don't double push a copy
             self._cached_funcs[ea]["cmts"] = cmts

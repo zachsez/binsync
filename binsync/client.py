@@ -464,7 +464,7 @@ class Client(object):
 
     def sync_states(self, user=None):
         target_state = self.get_state(user)
-        if target_state == None:
+        if target_state is None:
             print("Unable to find state for user", user)
             return
 

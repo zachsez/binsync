@@ -74,8 +74,8 @@ def make_state(f):
             kwargs['state'] = state
             r = f(self, *args, **kwargs)
 
-        if isinstance(args[0], int):
-            self._update_function_name_if_none(args[0], user=user, state=state)
+        #if isinstance(args[0], int):
+        #    self._update_function_name_if_none(args[0], user=user, state=state)
         return r
 
     return state_check
@@ -185,6 +185,10 @@ class BinsyncController:
         # api locks
         self.api_lock = threading.Lock()
         self.api_count = 0
+        # decompilation locks
+        self.decomp_working = False
+
+
 
         # start the pull routine
         self.pull_thread = threading.Thread(target=self.pull_routine)
@@ -193,6 +197,8 @@ class BinsyncController:
 
         # update state for only updating when needed
         self.update_states = defaultdict(UpdateTaskState)
+
+
 
     #
     #   Multithreaded locks and setters
@@ -355,14 +361,15 @@ class BinsyncController:
             return 0
 
         # check if the function exists in the pulled state
-        _func = self.pull_function(ida_func, user=user, state=state)
-        if _func is None:
+        binsync_func = self.pull_function(ida_func, user=user, state=state)
+        if binsync_func is None:
             return -1
 
-        # === function name === #
-        if _func.name and _func.name != "" and compat.get_func_name(ida_func.start_ea) != _func.name:
-            self.inc_api_count()
-            compat.set_ida_func_name(ida_func.start_ea, _func.name)
+        # create a reference to a IDA Decompilation View
+        ida_code_view = ida_hexrays.open_pseudocode(ida_func.start_ea, 0)
+
+        # === function header === #
+        compat.set_func_prototype(ida_code_view, binsync_func, self)
 
         # === comments === #
         # set disassembly and decompiled comments
@@ -390,7 +397,6 @@ class BinsyncController:
             existing_stack_vars[compat.ida_to_angr_stack_offset(ida_func.start_ea, offset)] = ida_var
 
         stack_vars_to_set = {}
-        ida_code_view = ida_hexrays.open_pseudocode(ida_func.start_ea, 0)
         # only try to set stack vars that actually exist
         for offset, stack_var in self.pull_stack_variables(ida_func, user=user, state=state).items():
             if offset in existing_stack_vars:
@@ -425,7 +431,7 @@ class BinsyncController:
             compat.set_stack_vars_types(stack_vars_to_set, ida_code_view, self)
 
         # ===== update the pseudocode ==== #
-        compat.refresh_pseudocode_view(_func.addr)
+        compat.refresh_pseudocode_view(binsync_func.addr)
         print(f"[Binsync]: New data synced for \'{user}\' on function {hex(ida_func.start_ea)}.")
 
     #
@@ -547,11 +553,10 @@ class BinsyncController:
 
     @init_checker
     @make_state
-    def push_function_name(self, attr_addr, new_name,
-                           user=None, state: "binsync.State" = None, api_set=False):
+    def push_function_header(self, attr_addr, name=None, ret_type_str=None, arguments=None,
+                             user=None, state: "binsync.State" = None, api_set=False):
         # setup the new function for binsync
-        func = binsync.data.Function(attr_addr)
-        func.name = new_name
+        func = binsync.data.Function(attr_addr, name=name, ret_type_str=ret_type_str, arguments=arguments)
         state.set_function(func, set_last_change=not api_set)
 
     @init_checker

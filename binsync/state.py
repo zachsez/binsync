@@ -37,7 +37,7 @@ def dirty_checker(f):
     return dirtycheck
 
 
-def set_last_change(f):
+def setup_last_change(f):
     @wraps(f)
     def _set_last_change(self, *args, **kwargs):
         should_set = kwargs.pop('set_last_change', None)
@@ -197,8 +197,10 @@ class State:
         # dump metadata
         self.dump_metadata(index)
 
-        # dump function
-        add_data(index, 'functions.toml', toml.dumps(Function.dump_many(self.functions)).encode())
+        # dump functions, one file per function
+        for f_addr, func in self.functions.items():
+            path = os.path.join('functions', f"%08x.toml" % f_addr)
+            add_data(index, path, toml.dumps(func.dump()).encode())
 
         # dump patches
         add_data(index, 'patches.toml', toml.dumps(Patch.dump_many(self.patches)).encode())
@@ -236,16 +238,17 @@ class State:
 
         s.version = version if version is not None else metadata["version"]
 
-        # load function
-        try:
-            funcs_toml = toml.loads(tree['functions.toml'].data_stream.read().decode())
-        except:
-            pass
-        else:
-            functions = {}
-            for func in Function.load_many(funcs_toml):
-                functions[func.addr] = func
-            s.functions = functions
+        # load functions
+        tree_files = list_files_in_tree(tree)
+        func_files = [name for name in tree_files if name.startswith("functions")]
+        for func_file in func_files:
+            try:
+                func_toml = toml.loads(tree[func_file].data_stream.read().decode())
+            except:
+                pass
+            else:
+                function = Function.load(func_toml)
+                s.functions[function.addr] = function
 
         # load comments
         for func_addr in s.functions:
@@ -285,7 +288,6 @@ class State:
                     s.stack_variables[svs[0].func_addr] = d
 
         # load structs
-        tree_files = list_files_in_tree(tree)
         struct_files = [name for name in tree_files if name.startswith("structs")]
         for struct_file in struct_files:
             try:
@@ -322,7 +324,7 @@ class State:
     #
 
     @dirty_checker
-    @set_last_change
+    @setup_last_change
     def set_function(self, func, set_last_change=True):
 
         if not isinstance(func, Function):
@@ -338,7 +340,7 @@ class State:
         return True
 
     @dirty_checker
-    @set_last_change
+    @setup_last_change
     def set_comment(self, comment: Comment, set_last_change=True):
 
         if comment and \
@@ -361,7 +363,7 @@ class State:
             return False
 
     @dirty_checker
-    @set_last_change
+    @setup_last_change
     def set_patch(self, patch, addr, set_last_change=True):
 
         if addr in self.patches and self.patches[addr] == patch:
@@ -372,7 +374,7 @@ class State:
         return True
 
     @dirty_checker
-    @set_last_change
+    @setup_last_change
     def set_stack_variable(self, variable, offset, func_addr, set_last_change=True):
         if func_addr in self.stack_variables \
                 and offset in self.stack_variables[func_addr] \
@@ -385,7 +387,7 @@ class State:
         return True
 
     @dirty_checker
-    @set_last_change
+    @setup_last_change
     def set_struct(self, struct: Struct, old_name: str, set_last_change=True):
         """
         Sets a struct in the current state. If old_name is not defined (None), then
