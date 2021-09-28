@@ -26,7 +26,7 @@ import logging
 from typing import Dict, List, Tuple, Optional, Iterable, Any
 from collections import OrderedDict, defaultdict
 
-from PySide2.QtWidgets import QDialog, QMessageBox
+from PySide6.QtWidgets import QDialog, QMessageBox
 
 from binaryninjaui import (
     UIContext,

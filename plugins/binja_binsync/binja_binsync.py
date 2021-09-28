@@ -7,7 +7,7 @@ from functools import wraps
 from typing import Optional, Iterable, Dict, Any
 import logging
 
-from PySide2.QtCore import Qt
+from PySide6.QtCore import Qt
 from binaryninjaui import (
     UIContext,
     DockHandler,

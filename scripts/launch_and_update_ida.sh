@@ -11,7 +11,7 @@ install_and_run() {
   export PYTHONBREAKPOINT=remote_pdb.set_trace
   export REMOTE_PDB_HOST=127.0.0.1
   export REMOTE_PDB_PORT=4444
-  (cd /"$IDA_HOME"/ && ./ida64 $1)
+  (cd /"$IDA_HOME"/ && ./ida $1)
 }
 
 if test -d "./binsync"; then

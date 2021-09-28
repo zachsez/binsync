@@ -1,5 +1,5 @@
-from PySide2.QtWidgets import QTableWidget, QTableWidgetItem, QAbstractItemView, QMenu, QHeaderView
-from PySide2.QtCore import Qt, QItemSelectionModel
+from PySide6.QtWidgets import QTableWidget, QTableWidgetItem, QAbstractItemView, QMenu, QHeaderView
+from PySide6.QtCore import Qt, QItemSelectionModel
 from typing import Dict
 
 from binsync.data import Struct

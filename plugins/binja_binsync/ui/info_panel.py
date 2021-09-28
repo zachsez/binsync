@@ -1,5 +1,6 @@
-from PySide2.QtWidgets import QVBoxLayout, QGroupBox, QMessageBox, QDialog, QWidget, QLabel, QComboBox, QHBoxLayout
-from PySide2.QtCore import Qt
+from PySide6.QtWidgets import QVBoxLayout, QGroupBox, QMessageBox, QDialog, QWidget, QLabel, QComboBox, QHBoxLayout
+from PySide6.QtWidgets import QVBoxLayout, QHBoxLayout, QGroupBox, QPushButton, QMessageBox, QDialog
+from PySide6.QtCore import Qt
 
 from .info_tables.func_info_table import QFuncInfoTable
 from .info_tables.struct_info_table import QStructInfoTable
@@ -7,11 +8,6 @@ from .info_tables.user_info_table import QUserInfoTable
 from .info_tables.autosync_info_table import QAutoSyncInfoTable
 from .info_tables.cur_func_info_table import QCurFuncInfoTable
 from ..controller import BinsyncController
-
-
-from PySide2.QtWidgets import QVBoxLayout, QHBoxLayout, QGroupBox, QPushButton, QMessageBox, QDialog
-from PySide2.QtCore import Qt
-
 from .ui_tools import BinjaWidget, BinjaDockWidget
 
 
